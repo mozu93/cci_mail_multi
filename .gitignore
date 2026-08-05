@@ -1,0 +1,33 @@
+# 設定ファイル（クライアントシークレット含む）
+app_config.json
+
+# データベース
+cci_mail.db
+cci_mail.db-shm
+cci_mail.db-wal
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# ユーザー固有UI設定
+ui_settings.json
+
+# ビルド成果物
+dist/
+build/
+installer_output/
+
+# データファイル
+*.xlsx
+*.csv
+
+# OS
+.DS_Store
+Thumbs.db
+.worktrees/
