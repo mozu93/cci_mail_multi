@@ -1,10 +1,11 @@
 # 設定ファイル（クライアントシークレット含む）
 app_config.json
+profiles.json
 
-# データベース
-cci_mail.db
-cci_mail.db-shm
-cci_mail.db-wal
+# データベース（会ごとに作成されるファイルを含む）
+*.db
+*.db-shm
+*.db-wal
 
 # Python
 __pycache__/

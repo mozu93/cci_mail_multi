@@ -12,7 +12,7 @@ from typing import Optional
 
 from packaging.version import Version
 
-GITHUB_API_URL = "https://api.github.com/repos/mozu93/cci_giin_mail/releases/latest"
+GITHUB_API_URL = "https://api.github.com/repos/mozu93/cci_mail_multi/releases/latest"
 _TIMEOUT = 8
 _ALLOWED_DOWNLOAD_HOSTS = {
     "github.com",
@@ -50,7 +50,7 @@ def check_latest_version_detailed() -> tuple[Optional[dict], str]:
         req = urllib.request.Request(
             GITHUB_API_URL,
             headers={"Accept": "application/vnd.github+json",
-                     "User-Agent": "cci-mail-updater"},
+                     "User-Agent": "cci-mail-multi-updater"},
         )
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -78,7 +78,7 @@ def check_latest_version_detailed() -> tuple[Optional[dict], str]:
             return None, (
                 "更新ファイルまたは安全確認用ファイルが見つかりませんでした。")
         checksum_req = urllib.request.Request(
-            checksum_url, headers={"User-Agent": "cci-mail-updater"})
+            checksum_url, headers={"User-Agent": "cci-mail-multi-updater"})
         with urllib.request.urlopen(checksum_req, timeout=_TIMEOUT) as response:
             if not _is_allowed_download_url(response.geturl()):
                 return None, "更新ファイルの配布先を安全に確認できませんでした。"
@@ -122,12 +122,12 @@ def download_new_exe(url: str, expected_sha256: str,
         return None
     tmp_path = None
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "cci-mail-updater"})
+        req = urllib.request.Request(url, headers={"User-Agent": "cci-mail-multi-updater"})
         with urllib.request.urlopen(req, timeout=60) as resp:
             if not _is_allowed_download_url(resp.geturl()):
                 return None
             total = int(resp.headers.get("Content-Length", -1))
-            fd, tmp_path = tempfile.mkstemp(suffix=".exe", prefix="cci_mail_new_")
+            fd, tmp_path = tempfile.mkstemp(suffix=".exe", prefix="cci_mail_multi_new_")
             received = 0
             digest = hashlib.sha256()
             with os.fdopen(fd, "wb") as f:
@@ -158,7 +158,7 @@ def launch_updater(new_exe_path: str, current_exe_path: str):
     updater.bat を %TEMP% に生成して起動し、アプリを終了する。
     bat は: 3秒待機（アプリ終了を待つ）→ インストーラーを起動 → 自己削除
     """
-    bat_fd, bat_path = tempfile.mkstemp(suffix=".bat", prefix="cci_mail_updater_")
+    bat_fd, bat_path = tempfile.mkstemp(suffix=".bat", prefix="cci_mail_multi_updater_")
     with os.fdopen(bat_fd, "w", encoding="cp932") as f:
         f.write("@echo off\r\n")
         f.write("timeout /t 3 /nobreak > nul\r\n")

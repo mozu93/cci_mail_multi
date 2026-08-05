@@ -48,6 +48,7 @@ class SettingsTab(QWidget):
         inner.addTab(self._position_committee_widget, "役職・委員会管理")
         if is_admin:
             inner.addTab(_StaffWidget(), "職員管理")
+        inner.addTab(_ProfileSettingsWidget(), "会の設定")
         inner.addTab(_DbSettingsWidget(), "データベース接続")
         inner.addTab(_ExportSettingsWidget(), "出力設定")
         if is_admin or os.environ.get("CCI_MAIL_DEV_TOOLS") == "1":
@@ -411,6 +412,16 @@ class _DbSettingsWidget(QWidget):
         super().__init__()
         layout = QVBoxLayout(self)
 
+        # どの会の接続先を編集しているかを明示する
+        from app.utils.profile_config import get_active_profile_name
+        profile_name = get_active_profile_name()
+        if profile_name:
+            profile_lbl = QLabel(f"編集中の会：{profile_name}")
+            profile_lbl.setStyleSheet("font-weight: bold; color: #1D4ED8;")
+            layout.addWidget(profile_lbl)
+            layout.addWidget(QLabel(
+                "※ ここでの変更はこの会のみに反映されます。他の会の接続先は変わりません。"))
+
         # DB種別選択
         type_grp = QGroupBox("データベースの種類")
         type_layout = QHBoxLayout(type_grp)
@@ -441,6 +452,17 @@ class _DbSettingsWidget(QWidget):
         pg_form.addRow("パスワード",              self._pg_pass)
         layout.addWidget(self._pg_grp)
 
+        # SQLite設定
+        self._sqlite_grp = QGroupBox("SQLite設定")
+        sqlite_row = QHBoxLayout(self._sqlite_grp)
+        self._sqlite_path = QLineEdit()
+        btn_browse = QPushButton("参照…")
+        btn_browse.clicked.connect(self._browse_db_file)
+        sqlite_row.addWidget(QLabel("ファイル"))
+        sqlite_row.addWidget(self._sqlite_path)
+        sqlite_row.addWidget(btn_browse)
+        layout.addWidget(self._sqlite_grp)
+
         # ボタン行
         btn_row = QHBoxLayout()
         btn_test = QPushButton("接続テスト")
@@ -460,6 +482,7 @@ class _DbSettingsWidget(QWidget):
         self._load()
 
     def _load(self):
+        from app.utils.app_config import get_db_path
         db_type = get_db_type()
         if db_type == "postgresql":
             self._rb_pg.setChecked(True)
@@ -471,11 +494,24 @@ class _DbSettingsWidget(QWidget):
         self._pg_db.setText(pg.get("database", "cci_mail"))
         self._pg_user.setText(pg.get("user", ""))
         self._pg_pass.setText(pg.get("password", ""))
-        self._pg_grp.setEnabled(self._rb_pg.isChecked())
+        self._sqlite_path.setText(get_db_path())
+        self._apply_type_visibility(self._rb_pg.isChecked())
+
+    def _apply_type_visibility(self, is_pg: bool):
+        self._pg_grp.setEnabled(is_pg)
+        self._pg_grp.setVisible(is_pg)
+        self._sqlite_grp.setVisible(not is_pg)
 
     def _on_type_toggle(self, btn_id: int, checked: bool):
         if checked:
-            self._pg_grp.setEnabled(btn_id == 1)
+            self._apply_type_visibility(btn_id == 1)
+
+    def _browse_db_file(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "データベースファイルを選択", self._sqlite_path.text().strip(),
+            "SQLiteデータベース (*.db);;すべてのファイル (*.*)")
+        if path:
+            self._sqlite_path.setText(path)
 
     def _test_connection(self):
         if self._rb_sqlite.isChecked():
@@ -503,18 +539,70 @@ class _DbSettingsWidget(QWidget):
             QMessageBox.critical(self, "接続テスト失敗", format_connection_error(e))
 
     def _save(self):
-        config = get_config()
-        config["db_type"] = "postgresql" if self._rb_pg.isChecked() else "sqlite"
-        config["postgresql"] = {
-            "host":     self._pg_host.text().strip(),
-            "port":     self._pg_port.text().strip() or "5432",
-            "database": self._pg_db.text().strip(),
-            "user":     self._pg_user.text().strip(),
-            "password": self._pg_pass.text(),
-        }
-        save_config(config)
+        """起動中の会の接続先だけを更新する（他の会には影響しない）"""
+        from app.utils.profile_config import save_active_db_settings
+        is_pg = self._rb_pg.isChecked()
+        save_active_db_settings(
+            db_type="postgresql" if is_pg else "sqlite",
+            db_path="" if is_pg else self._sqlite_path.text().strip(),
+            postgresql={
+                "host":     self._pg_host.text().strip(),
+                "port":     self._pg_port.text().strip() or "5432",
+                "database": self._pg_db.text().strip(),
+                "user":     self._pg_user.text().strip(),
+                "password": self._pg_pass.text(),
+            },
+        )
         QMessageBox.information(self, "保存完了",
                                 "設定を保存しました。\nアプリを再起動すると新しい接続先が有効になります。")
+
+
+class _ProfileSettingsWidget(QWidget):
+    """起動中の会そのものに関する設定"""
+
+    def __init__(self):
+        super().__init__()
+        from app.utils.profile_config import get_active_profile_name
+        layout = QVBoxLayout(self)
+
+        grp = QGroupBox("担当している会")
+        form = QFormLayout(grp)
+        name_lbl = QLabel(get_active_profile_name() or "（未選択）")
+        name_lbl.setStyleSheet("font-weight: bold; color: #1D4ED8;")
+        form.addRow("会の名称", name_lbl)
+        layout.addWidget(grp)
+        layout.addWidget(QLabel(
+            "会の名称・接続先の変更は「ファイル」メニューの"
+            "「会を切り替える…」から行えます。"))
+
+        vote_grp = QGroupBox("議決権数の集計")
+        vote_form = QFormLayout(vote_grp)
+        self._excluded_org = QLineEdit()
+        self._excluded_org.setPlaceholderText("例：四日市商工会議所（空欄なら除外しない）")
+        vote_form.addRow("除外する事業所名", self._excluded_org)
+        layout.addWidget(vote_grp)
+        layout.addWidget(QLabel(
+            "議決権数は出席・代理・委任の合計から「監事」と、"
+            "上記キーワードを事業所名に含む会員を除いて数えます。\n"
+            "ただし「専務理事」は除外しません。"))
+
+        btn_row = QHBoxLayout()
+        btn_save = QPushButton("設定を保存")
+        btn_save.clicked.connect(self._save)
+        btn_row.addWidget(btn_save)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+        layout.addStretch()
+        self._load()
+
+    def _load(self):
+        from app.utils.app_config import get_voting_excluded_org
+        self._excluded_org.setText(get_voting_excluded_org())
+
+    def _save(self):
+        from app.utils.app_config import save_voting_excluded_org
+        save_voting_excluded_org(self._excluded_org.text().strip())
+        QMessageBox.information(self, "保存完了", "この会の設定を保存しました。")
 
 
 class _ExportSettingsWidget(QWidget):

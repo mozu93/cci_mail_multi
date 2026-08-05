@@ -13,8 +13,8 @@ _ALL_KEYS = ["事業所名", "役職名", "氏名", "会議所役職名",
 _SEND_SCOPES = ["https://graph.microsoft.com/Mail.Send"]
 _READ_SCOPES = ["https://graph.microsoft.com/Mail.Read"]
 _SEND_SHARED_SCOPE = "https://graph.microsoft.com/Mail.Send.Shared"
-_CACHE_FILE = Path.home() / ".cci-mail" / "m365_token_cache_v2.bin"
-_LEGACY_CACHE_FILE = Path.home() / ".cci-mail" / "m365_token_cache.bin"
+_CACHE_FILE = Path.home() / ".cci-mail-multi" / "m365_token_cache_v2.bin"
+_LEGACY_CACHE_FILE = Path.home() / ".cci-mail-multi" / "m365_token_cache.bin"
 
 
 def _public_client(graph_config: dict):

@@ -1,0 +1,16 @@
+# Windows環境で運用するため、テキストファイルはCRLFで統一する
+* text=auto eol=crlf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# バイナリファイル
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.exe binary
+*.dll binary
+*.db binary
+*.xlsx binary

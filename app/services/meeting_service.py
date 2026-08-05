@@ -316,9 +316,19 @@ _XLSX_CENTER_COLUMNS = {1, 2, 6}  # No., 事前, 氏名
 # （既定フォントCalibri 11・既定列幅8.43文字=64pxを基準とした変換式）。
 _XLSX_COLUMN_WIDTHS_PX = [30, 45, 45, 235, 129, 93, 141]
 
-# 議決権数の集計から除外する会議所役職・事業所キーワード
+# 議決権数の集計から除外する会議所役職
 _VOTING_EXCLUDED_POSITION = "監事"
-_VOTING_EXCLUDED_ORG_KEYWORD = "四日市商工会議所"
+# 除外対象でも議決権を持つ会議所役職
+_VOTING_KEPT_POSITION = "専務理事"
+
+
+def _voting_excluded_org() -> str:
+    """議決権数から除外する事業所名キーワード（会ごとに設定・未設定なら除外しない）"""
+    try:
+        from app.utils.app_config import get_voting_excluded_org
+        return get_voting_excluded_org().strip()
+    except Exception:
+        return ""
 
 _SUMMARY_HEADERS = ["出席", "代理", "委任", "欠席", "議決権数",
                     "実出席", "事務局", "合計\n（飲み物用）"]
@@ -336,11 +346,12 @@ def _calc_attendance_summary(data: list[dict]) -> dict:
     """出欠状況・議決権数・実出席者数を集計する。
 
     議決権数は出席・代理・委任の合計から、会議所役職が「監事」の会員と、
-    事業所名に「四日市商工会議所」を含む会員を除いた人数。
-    ただし「専務理事」は四日市商工会議所所属でも議決権数に含める。
+    事業所名が除外キーワード（会ごとに設定）を含む会員を除いた人数。
+    ただし「専務理事」は除外対象の事業所所属でも議決権数に含める。
     実出席（飲み物注文用）は出席・代理の合計（除外なし）。
     """
     counts = {"出席": 0, "代理": 0, "委任": 0, "欠席": 0}
+    excluded_org = _voting_excluded_org()
     voting_count = 0
     actual_count = 0
     for d in data:
@@ -351,8 +362,9 @@ def _calc_attendance_summary(data: list[dict]) -> dict:
         excluded = (
             position == _VOTING_EXCLUDED_POSITION
             or (
-                _VOTING_EXCLUDED_ORG_KEYWORD in d["org_name"]
-                and position != "専務理事"
+                bool(excluded_org)
+                and excluded_org in d["org_name"]
+                and position != _VOTING_KEPT_POSITION
             )
         )
         if status in ("出席", "代理", "委任") and not excluded:
@@ -429,11 +441,17 @@ def export_xlsx(session: Session, meeting_id: int, filepath: str) -> None:
         f"{get_column_letter(_SUMMARY_OFFICE_COL)}{summary_values_row})"
     )
 
+    excluded_org = _voting_excluded_org()
+    if excluded_org:
+        note = (f"※議決権数は出席・代理・委任の合計から、"
+                f"{_VOTING_EXCLUDED_POSITION}および{excluded_org}を除いた人数です。"
+                f"ただし、{_VOTING_KEPT_POSITION}は議決権数に含みます。")
+    else:
+        note = (f"※議決権数は出席・代理・委任の合計から、"
+                f"{_VOTING_EXCLUDED_POSITION}を除いた人数です。")
     note_row = section_row + 3
     ws.cell(row=note_row, column=1,
-            value="※議決権数は出席・代理・委任の合計から、監事および四日市商工会議所を除いた人数です。"
-                  "ただし、専務理事は議決権数に含みます。"
-                  "事務局欄に人数を入力すると合計（飲み物用）が自動計算されます。").font = Font(
+            value=note + "事務局欄に人数を入力すると合計（飲み物用）が自動計算されます。").font = Font(
         size=9, color="666666")
     ws.merge_cells(start_row=note_row, start_column=1,
                    end_row=note_row, end_column=n_cols)

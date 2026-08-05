@@ -1,32 +1,19 @@
 import json
-import os
-import sys
 from pathlib import Path
 
 
 def _app_data_dir() -> Path:
-    if sys.platform == "win32":
-        base = os.environ.get("APPDATA") or Path.home()
-    else:
-        base = Path.home()
-    d = Path(base) / "cci-mail"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
+    """起動中の会の設定保存ディレクトリ"""
+    from app.utils.profile_config import active_profile_dir
+    return active_profile_dir()
 
 
 def _config_path() -> Path:
-    new_path = _app_data_dir() / "app_config.json"
-    old_path = Path(__file__).parent.parent.parent / "app_config.json"
-    if not new_path.exists() and old_path.exists():
-        import shutil
-        shutil.copy2(old_path, new_path)
-    return new_path
+    return _app_data_dir() / "app_config.json"
 
 
 def _db_default_path() -> Path:
-    old_path = Path(__file__).parent.parent.parent / "cci_mail.db"
-    if old_path.exists():
-        return old_path
+    """接続先が未指定のときに使うSQLiteファイル（会ごとに独立）"""
     return _app_data_dir() / "cci_mail.db"
 
 
@@ -45,8 +32,9 @@ def save_config(config: dict) -> None:
 
 
 def get_db_path() -> str:
-    config = get_config()
-    db_path = config.get("db_path", "")
+    """起動中の会のSQLiteファイルパス"""
+    from app.utils.profile_config import get_active_db_settings
+    db_path = get_active_db_settings().get("db_path", "")
     if db_path:
         return db_path
     return str(_db_default_path())
@@ -57,8 +45,9 @@ def get_graph_config() -> dict:
 
 
 def get_db_type() -> str:
-    """'sqlite' または 'postgresql' を返す（デフォルトは 'sqlite'）"""
-    return get_config().get("db_type", "sqlite")
+    """起動中の会のDB種別。'sqlite' または 'postgresql'（既定は 'sqlite'）"""
+    from app.utils.profile_config import get_active_db_settings
+    return get_active_db_settings().get("db_type", "sqlite")
 
 
 def get_html_export_path() -> str:
@@ -114,16 +103,13 @@ def _set_shared_setting(key: str, value: str) -> None:
 
 
 def is_first_run() -> bool:
-    """設定ファイルが一度も保存されていない（＝DB接続先が未設定の）状態かどうか。
-
-    既存インストール（本機能追加前に作られたconfig）は、キーの有無に関わらず
-    ファイルが存在する時点で「設定済み」とみなし、初回設定ウィザードを出さない。
-    """
+    """起動中の会の設定ファイルが一度も保存されていない状態かどうか"""
     return not _config_path().exists()
 
 
 def get_pg_config() -> dict:
-    """PostgreSQL接続設定を返す"""
+    """起動中の会のPostgreSQL接続設定を返す"""
+    from app.utils.profile_config import get_active_db_settings
     defaults = {
         "host": "localhost",
         "port": "5432",
@@ -131,7 +117,18 @@ def get_pg_config() -> dict:
         "user": "",
         "password": "",
     }
-    return {**defaults, **get_config().get("postgresql", {})}
+    return {**defaults, **(get_active_db_settings().get("postgresql") or {})}
+
+
+def get_voting_excluded_org() -> str:
+    """議決権数の集計から除外する事業所名のキーワード（会ごとに設定）"""
+    return get_config().get("voting_excluded_org", "")
+
+
+def save_voting_excluded_org(keyword: str) -> None:
+    config = get_config()
+    config["voting_excluded_org"] = keyword
+    save_config(config)
 
 
 def get_attendance_mail_folder() -> str:

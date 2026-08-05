@@ -1,6 +1,7 @@
 def test_login_button_disabled_until_staff_selected(qtbot, monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "app.services.settings_service._PATH", tmp_path / "ui_settings.json")
+        "app.services.settings_service._path",
+        lambda: tmp_path / "ui_settings.json")
 
     class _Staff:
         def __init__(self, name):
@@ -24,7 +25,8 @@ def test_login_button_disabled_until_staff_selected(qtbot, monkeypatch, tmp_path
 
 def test_last_staff_is_remembered(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "app.services.settings_service._PATH", tmp_path / "ui_settings.json")
+        "app.services.settings_service._path",
+        lambda: tmp_path / "ui_settings.json")
     from app.services.settings_service import get_last_staff, set_last_staff
     assert get_last_staff() == ""
     set_last_staff("担当者A")

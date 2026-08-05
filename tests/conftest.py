@@ -12,6 +12,10 @@ def isolate_user_data(tmp_path, monkeypatch):
     appdata.mkdir()
     monkeypatch.setenv("APPDATA", str(appdata))
 
+    # 起動中の会はプロセス内グローバルのため、テスト間で持ち越さない
+    from app.utils import profile_config
+    monkeypatch.setattr(profile_config, "_active_profile_id", "")
+
     from app.services import email_service
     monkeypatch.setattr(
         email_service, "_CACHE_FILE", tmp_path / "m365_token_cache_v2.bin")

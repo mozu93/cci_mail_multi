@@ -1,20 +1,26 @@
 import json
 from pathlib import Path
 
-_PATH = Path(__file__).parent.parent.parent / "ui_settings.json"
+
+def _path() -> Path:
+    """UI設定の保存先（起動中の会ごとに独立）"""
+    from app.utils.profile_config import active_profile_dir
+    return active_profile_dir() / "ui_settings.json"
 
 
 def _load() -> dict:
-    if _PATH.exists():
+    p = _path()
+    if p.exists():
         try:
-            return json.loads(_PATH.read_text(encoding="utf-8"))
+            return json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             return {}
     return {}
 
 
 def _save(data: dict):
-    _PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _path().write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
 
 
 def get_font_size(key: str, default: int) -> int:

@@ -199,6 +199,9 @@ def test_get_member_ids_by_status_excludes_members_who_joined_after_past_meeting
 
 
 def test_export_xlsx_attendance_summary_counts(db_session, tmp_path):
+    from app.utils.app_config import save_voting_excluded_org
+    save_voting_excluded_org("四日市商工会議所")
+
     position = create_position(db_session, "議員", 1)
     kanji_position = create_position(db_session, "監事", 2)
     managing_director = create_position(db_session, "専務理事", 3)
@@ -258,19 +261,85 @@ def test_export_xlsx_attendance_summary_counts(db_session, tmp_path):
         f"=SUM(F{summary_values_row},G{summary_values_row})")
 
 
+def _summary_note(ws):
+    return next(
+        ws.cell(row=row, column=1).value
+        for row in range(1, ws.max_row + 1)
+        if str(ws.cell(row=row, column=1).value or "").startswith("※議決権数"))
+
+
 def test_export_xlsx_summary_note_mentions_exclusion_rule(db_session, tmp_path):
+    from app.utils.app_config import save_voting_excluded_org
+    save_voting_excluded_org("四日市商工会議所")
+
     meeting = create_meeting(db_session, "定例会議", date(2026, 7, 20))
     path = tmp_path / "attendance_note.xlsx"
     export_xlsx(db_session, meeting.id, str(path))
 
     wb = openpyxl.load_workbook(path)
-    ws = wb.active
-    note = next(
-        ws.cell(row=row, column=1).value
-        for row in range(1, ws.max_row + 1)
-        if str(ws.cell(row=row, column=1).value or "").startswith("※議決権数"))
+    note = _summary_note(wb.active)
     assert "監事" in note
     assert "四日市商工会議所" in note
+
+
+def test_export_xlsx_summary_note_omits_org_when_not_configured(db_session, tmp_path):
+    """除外事業所を設定していない会では、事業所による除外を注記しない"""
+    meeting = create_meeting(db_session, "定例会議", date(2026, 7, 20))
+    path = tmp_path / "attendance_note_no_org.xlsx"
+    export_xlsx(db_session, meeting.id, str(path))
+
+    wb = openpyxl.load_workbook(path)
+    note = _summary_note(wb.active)
+    assert "監事" in note
+    assert "四日市商工会議所" not in note
+
+
+def _voting_count_from_xlsx(ws) -> int:
+    header_row = next(
+        row for row in range(1, ws.max_row + 1)
+        if ws.cell(row=row, column=1).value == "出席"
+        and ws.cell(row=row, column=2).value == "代理")
+    return ws.cell(row=header_row + 1, column=5).value
+
+
+def _build_voting_fixture(db_session):
+    position = create_position(db_session, "議員", 1)
+    managing_director = create_position(db_session, "専務理事", 2)
+    members = [
+        create_member(db_session, "A-201", "○○商事", "出席太郎",
+                      position_id=position.id),
+        create_member(db_session, "A-202", "四日市商工会議所", "職員次郎",
+                      position_id=position.id),
+        create_member(db_session, "A-203", "四日市商工会議所", "専務三郎",
+                      position_id=managing_director.id),
+    ]
+    meeting = create_meeting(db_session, "議決権テスト", _FUTURE_DATE)
+    for member in members:
+        upsert_attendance(db_session, meeting.id, member.id, "出席")
+    return meeting
+
+
+def test_voting_count_excludes_configured_org_but_keeps_managing_director(
+        db_session, tmp_path):
+    """除外事業所を設定した会では、その事業所の一般会員が議決権数から外れる"""
+    from app.utils.app_config import save_voting_excluded_org
+    save_voting_excluded_org("四日市商工会議所")
+
+    meeting = _build_voting_fixture(db_session)
+    path = tmp_path / "voting_excluded.xlsx"
+    export_xlsx(db_session, meeting.id, str(path))
+
+    # 出席3名のうち、除外事業所の一般会員だけが議決権数から外れる
+    assert _voting_count_from_xlsx(openpyxl.load_workbook(path).active) == 2
+
+
+def test_voting_count_keeps_all_when_no_org_configured(db_session, tmp_path):
+    """除外事業所を設定していない会では、事業所による除外を行わない"""
+    meeting = _build_voting_fixture(db_session)
+    path = tmp_path / "voting_all.xlsx"
+    export_xlsx(db_session, meeting.id, str(path))
+
+    assert _voting_count_from_xlsx(openpyxl.load_workbook(path).active) == 3
 
 
 def test_reception_voting_count_uses_actual_status_and_subtracts_attending_auditors(
