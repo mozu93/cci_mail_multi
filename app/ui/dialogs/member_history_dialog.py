@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from sqlalchemy.orm import Session
 from app.services.member_service import get_member_history, get_member, member_to_snapshot
+from app.utils.terms import active_state_label, retire_label
 
 _FIELD_LABELS = {
     "member_number":     "会員番号",
@@ -17,9 +18,15 @@ _FIELD_LABELS = {
     "name":              "氏名",
     "name_kana":         "氏名フリガナ",
     "notes":             "備考",
-    "is_active":         "議員状態",
     "position_id":       "会議所役職ID（旧）",
 }
+
+
+def _field_label(key: str) -> str:
+    """項目名。在任状態の呼び方だけは会ごとの設定に従う。"""
+    if key == "is_active":
+        return active_state_label()
+    return _FIELD_LABELS.get(key, key)
 
 _HIGHLIGHT = QColor("#FEF3C7")   # 差分行: 黄色
 
@@ -105,7 +112,7 @@ class MemberHistoryDialog(QDialog):
 
     def _fmt(self, k: str, v) -> str:
         if k == "is_active":
-            return "在任中" if v else "議員退任"
+            return "在任中" if v else retire_label()
         if v is None or v == "":
             return "（なし）"
         return str(v)
@@ -142,7 +149,7 @@ class MemberHistoryDialog(QDialog):
         for k, v_before in snap_before.items():
             if k == "email_addresses":
                 continue
-            label    = _FIELD_LABELS.get(k, k)
+            label    = _field_label(k)
             s_before = self._fmt(k, v_before)
             s_after  = self._fmt(k, snap_after.get(k))
             self._add_row(label, s_before, s_after)

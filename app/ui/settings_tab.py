@@ -597,6 +597,20 @@ class _ProfileSettingsWidget(QWidget):
             "会の名称・接続先の変更は「ファイル」メニューの"
             "「会を切り替える…」から行えます。"))
 
+        term_grp = QGroupBox("画面に表示する呼称")
+        term_form = QFormLayout(term_grp)
+        self._member_term = QLineEdit()
+        self._member_term.setPlaceholderText("例：議員（空欄可）")
+        self._member_term.textChanged.connect(self._update_term_preview)
+        term_form.addRow("会員の呼称", self._member_term)
+        self._term_preview = QLabel()
+        self._term_preview.setStyleSheet("color: #475569;")
+        term_form.addRow("表示例", self._term_preview)
+        layout.addWidget(term_grp)
+        layout.addWidget(QLabel(
+            "名簿管理の「退任」ボタンや「退任者を含む」の表示に使われます。\n"
+            "議員の会は「議員」、女性部・青年部などは空欄のままにしてください。"))
+
         vote_grp = QGroupBox("議決権数の集計")
         vote_form = QFormLayout(vote_grp)
         self._excluded_org = QLineEdit()
@@ -619,12 +633,26 @@ class _ProfileSettingsWidget(QWidget):
 
     def _load(self):
         from app.utils.app_config import get_voting_excluded_org
+        from app.utils.terms import member_term
+        self._member_term.setText(member_term())
         self._excluded_org.setText(get_voting_excluded_org())
+        self._update_term_preview()
+
+    def _update_term_preview(self):
+        """入力中の呼称で、実際にどう表示されるかを示す"""
+        term = self._member_term.text().strip()
+        self._term_preview.setText(
+            f"「{term}退任」　「{term}退任者を含む」")
 
     def _save(self):
         from app.utils.app_config import save_voting_excluded_org
+        from app.utils.terms import save_member_term
+        save_member_term(self._member_term.text())
         save_voting_excluded_org(self._excluded_org.text().strip())
-        QMessageBox.information(self, "保存完了", "この会の設定を保存しました。")
+        QMessageBox.information(
+            self, "保存完了",
+            "この会の設定を保存しました。\n"
+            "画面の表示は、名簿管理タブへ切り替えると更新されます。")
 
 
 class _ExportSettingsWidget(QWidget):

@@ -91,9 +91,21 @@ def test_delete_member(db_session):
     fetched = get_member(db_session, m.id)
     assert fetched is not None
     assert fetched.is_active is False
-    # 退会処理履歴が記録されている
+    # 退会処理履歴が記録されている（呼称未設定の会では「退任」）
     history = get_member_history(db_session, m.id)
     reasons = [h.change_reason for h in history]
+    assert "退任" in reasons
+
+
+def test_delete_member_history_uses_configured_term(db_session):
+    """会員の呼称を設定した会では、履歴の理由もその呼称に従う"""
+    from app.utils.terms import save_member_term
+    save_member_term("議員")
+
+    m = create_member(db_session, "A-001", "○○商事", "山田 太郎")
+    delete_member(db_session, m.id, changed_by="管理者")
+
+    reasons = [h.change_reason for h in get_member_history(db_session, m.id)]
     assert "議員退任" in reasons
 
 

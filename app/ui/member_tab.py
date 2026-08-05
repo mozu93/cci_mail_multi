@@ -9,6 +9,7 @@ from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 from app.database.connection import get_session
 from app.database.models import Position
 from app.services.member_service import get_members, delete_member
+from app.utils.terms import retire_label, retired_label, order_button_label
 
 
 _COLUMN_LABELS = [
@@ -20,7 +21,7 @@ _COLUMN_LABELS = [
 
 
 class _RoleSortItem(QTableWidgetItem):
-    """会議所役職列専用: 順番設定の並び順→就任順(副会頭)→事業所名フリガナ順でソートする"""
+    """会議所役職列専用: 順番設定の並び順→就任順→事業所名フリガナ順でソートする"""
 
     def __init__(self, text: str, sort_order: int, display_order, kana: str):
         super().__init__(text)
@@ -41,7 +42,14 @@ class MemberTab(QWidget):
         self._load()
 
     def refresh(self):
+        self._apply_terms()
         self._load()
+
+    def _apply_terms(self):
+        """会ごとの呼称設定を画面のラベルへ反映する（設定変更後の再表示用）"""
+        self._show_inactive.setText(f"{retired_label()}を含む")
+        self._btn_retire.setText(retire_label())
+        self._btn_order.setText(order_button_label())
 
     def set_staff_name(self, name: str):
         self._staff_name = name
@@ -61,7 +69,7 @@ class MemberTab(QWidget):
         self._pos_filter = QComboBox()
         self._pos_filter.addItem("すべての役職", None)
         self._pos_filter.currentIndexChanged.connect(self._load)
-        self._show_inactive = QCheckBox("議員退任者を含む")
+        self._show_inactive = QCheckBox(f"{retired_label()}を含む")
         self._show_inactive.stateChanged.connect(self._load)
         row1.addWidget(self._search, 2)
         row1.addWidget(QLabel("役職:"))
@@ -83,7 +91,7 @@ class MemberTab(QWidget):
         self._btn_history = QPushButton("変更履歴")
         self._btn_history.setEnabled(False)
         self._btn_history.clicked.connect(self._show_history)
-        self._btn_retire = QPushButton("議員退任")
+        self._btn_retire = QPushButton(retire_label())
         self._btn_retire.setEnabled(False)
         self._btn_retire.setStyleSheet(
             "background-color: #DC2626; color: white;")
@@ -97,15 +105,15 @@ class MemberTab(QWidget):
         file_menu.addAction("エクスポート", self._export)
         btn_file.setMenu(file_menu)
 
-        btn_order = QPushButton("副会頭の就任順")
-        btn_order.clicked.connect(self._order_settings)
+        self._btn_order = QPushButton(order_button_label())
+        self._btn_order.clicked.connect(self._order_settings)
 
         row2.addWidget(btn_add)
         row2.addWidget(self._btn_edit)
         row2.addWidget(self._btn_history)
         row2.addWidget(self._btn_retire)
         row2.addWidget(btn_file)
-        row2.addWidget(btn_order)
+        row2.addWidget(self._btn_order)
         row2.addStretch()
         layout.addLayout(row2)
 
@@ -290,7 +298,7 @@ class MemberTab(QWidget):
             else:
                 retired_count = len(members) - active_count
                 self._count_label.setText(
-                    f"{active_count} 件（議員退任者 {retired_count} 件を含む）")
+                    f"{active_count} 件（{retired_label()} {retired_count} 件を含む）")
 
             no_filter = (
                 not self._search.text().strip()
@@ -357,7 +365,7 @@ class MemberTab(QWidget):
         menu.addAction("編集", self._edit)
         menu.addAction("変更履歴", self._show_history)
         menu.addSeparator()
-        menu.addAction("議員退任", self._delete)
+        menu.addAction(retire_label(), self._delete)
         menu.exec(self._table.viewport().mapToGlobal(pos))
 
     def _add(self):
@@ -386,12 +394,14 @@ class MemberTab(QWidget):
         member_id = self._selected_member_id()
         if member_id is None:
             return
+        retire = retire_label()
         if not self._selected_is_active():
-            QMessageBox.information(self, "議員退任済み", "この会員はすでに議員退任処理済みです。")
+            QMessageBox.information(
+                self, f"{retire}済み", f"この会員はすでに{retire}処理済みです。")
             return
         ret = QMessageBox.question(
-            self, "議員退任処理確認",
-            "この会員を議員退任処理しますか？\n一覧から非表示になりますが、変更履歴は保持されます。",
+            self, f"{retire}処理確認",
+            f"この会員を{retire}処理しますか？\n一覧から非表示になりますが、変更履歴は保持されます。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -408,8 +418,9 @@ class MemberTab(QWidget):
             if item and item.data(Qt.ItemDataRole.UserRole) == member_id:
                 self._table.selectRow(r)
                 break
-        QMessageBox.information(self, "議員退任完了",
-                                "議員退任処理が完了しました。\n変更履歴ボタンで履歴を確認できます。")
+        QMessageBox.information(
+            self, f"{retire}完了",
+            f"{retire}処理が完了しました。\n変更履歴ボタンで履歴を確認できます。")
 
     def _show_history(self):
         member_id = self._selected_member_id()
