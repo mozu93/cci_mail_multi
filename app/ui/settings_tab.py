@@ -467,9 +467,14 @@ class _DbSettingsWidget(QWidget):
         btn_row = QHBoxLayout()
         btn_test = QPushButton("接続テスト")
         btn_test.clicked.connect(self._test_connection)
+        self._btn_create_db = QPushButton("データベースを作成")
+        self._btn_create_db.setToolTip(
+            "サーバーにこの会用のデータベースをまだ作成していない場合にクリックします")
+        self._btn_create_db.clicked.connect(self._create_database)
         btn_save = QPushButton("設定を保存（要再起動）")
         btn_save.clicked.connect(self._save)
         btn_row.addWidget(btn_test)
+        btn_row.addWidget(self._btn_create_db)
         btn_row.addWidget(btn_save)
         btn_row.addStretch()
         layout.addLayout(btn_row)
@@ -501,6 +506,8 @@ class _DbSettingsWidget(QWidget):
         self._pg_grp.setEnabled(is_pg)
         self._pg_grp.setVisible(is_pg)
         self._sqlite_grp.setVisible(not is_pg)
+        # SQLiteはファイルが自動生成されるため、作成ボタンは不要
+        self._btn_create_db.setVisible(is_pg)
 
     def _on_type_toggle(self, btn_id: int, checked: bool):
         if checked:
@@ -535,8 +542,29 @@ class _DbSettingsWidget(QWidget):
             QMessageBox.information(self, "接続テスト成功",
                                     "PostgreSQLへの接続に成功しました。")
         except Exception as e:
-            from app.utils.db_errors import format_connection_error
+            from app.utils.db_errors import (
+                format_connection_error, is_missing_database_error)
+            # データベース未作成が原因なら、その場で作成できるようにする
+            if is_missing_database_error(e):
+                from app.ui.widgets.db_provision import offer_to_create_database
+                if offer_to_create_database(self, self._pg_values()):
+                    self._test_connection()
+                return
             QMessageBox.critical(self, "接続テスト失敗", format_connection_error(e))
+
+    def _pg_values(self) -> dict:
+        return {
+            "host":     self._pg_host.text().strip(),
+            "port":     self._pg_port.text().strip() or "5432",
+            "database": self._pg_db.text().strip(),
+            "user":     self._pg_user.text().strip(),
+            "password": self._pg_pass.text(),
+        }
+
+    def _create_database(self):
+        """サーバーにこの会用のデータベースを作成する"""
+        from app.ui.widgets.db_provision import create_database_interactive
+        create_database_interactive(self, self._pg_values())
 
     def _save(self):
         """起動中の会の接続先だけを更新する（他の会には影響しない）"""
@@ -545,13 +573,7 @@ class _DbSettingsWidget(QWidget):
         save_active_db_settings(
             db_type="postgresql" if is_pg else "sqlite",
             db_path="" if is_pg else self._sqlite_path.text().strip(),
-            postgresql={
-                "host":     self._pg_host.text().strip(),
-                "port":     self._pg_port.text().strip() or "5432",
-                "database": self._pg_db.text().strip(),
-                "user":     self._pg_user.text().strip(),
-                "password": self._pg_pass.text(),
-            },
+            postgresql=self._pg_values(),
         )
         QMessageBox.information(self, "保存完了",
                                 "設定を保存しました。\nアプリを再起動すると新しい接続先が有効になります。")

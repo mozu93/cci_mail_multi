@@ -85,3 +85,14 @@ def format_connection_error(e: Exception) -> str:
     if hint:
         parts.append(f"【対処】\n{hint}")
     return "\n\n".join(parts)
+
+
+def is_missing_database_error(e: Exception) -> bool:
+    """接続先のデータベースがまだ作成されていないことが原因かどうか"""
+    detail, _ = _decode_detail(e)
+    lowered = detail.lower()
+    if not any(s in lowered for s in ("does not exist", "存在しません")):
+        return False
+    if any(s in lowered for s in ("role", "ロール")):
+        return False
+    return any(s in lowered for s in ("database", "データベース"))

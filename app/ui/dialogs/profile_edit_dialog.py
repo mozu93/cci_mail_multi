@@ -103,12 +103,17 @@ class ProfileEditDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_test = QPushButton("接続テスト")
         btn_test.clicked.connect(self._test_connection)
+        self._btn_create_db = QPushButton("データベースを作成")
+        self._btn_create_db.setToolTip(
+            "サーバーにこの会用のデータベースをまだ作成していない場合にクリックします")
+        self._btn_create_db.clicked.connect(self._create_database)
         btn_cancel = QPushButton("キャンセル")
         btn_cancel.clicked.connect(self.reject)
         btn_ok = QPushButton("登録" if self._is_new else "保存")
         btn_ok.setDefault(True)
         btn_ok.clicked.connect(self._save)
         btn_row.addWidget(btn_test)
+        btn_row.addWidget(self._btn_create_db)
         btn_row.addStretch()
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_ok)
@@ -142,6 +147,8 @@ class ProfileEditDialog(QDialog):
     def _on_type_change(self, index: int):
         self._pg_grp.setVisible(index == _TYPE_PG)
         self._sqlite_grp.setVisible(index == _TYPE_SQLITE)
+        # SQLiteはファイルが自動生成されるため、作成ボタンは不要
+        self._btn_create_db.setVisible(index == _TYPE_PG)
         self._sync_default_db_path()
         self.adjustSize()
 
@@ -181,10 +188,10 @@ class ProfileEditDialog(QDialog):
     def _selected_db_type(self) -> str:
         return "postgresql" if self._db_type.currentIndex() == _TYPE_PG else "sqlite"
 
-    def _try_connect(self) -> tuple[bool, str]:
+    def _try_connect(self) -> tuple[bool, str, Exception | None]:
         """PostgreSQLへ接続できるか確認する。SQLiteは常に成功扱い。"""
         if self._selected_db_type() == "sqlite":
-            return True, ""
+            return True, "", None
         try:
             from sqlalchemy import create_engine, text
             from sqlalchemy.engine import URL as SaURL
@@ -199,10 +206,10 @@ class ProfileEditDialog(QDialog):
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             engine.dispose()
-            return True, ""
+            return True, "", None
         except Exception as e:
             from app.utils.db_errors import format_connection_error
-            return False, format_connection_error(e)
+            return False, format_connection_error(e), e
 
     def _test_connection(self):
         if self._selected_db_type() == "sqlite":
@@ -210,12 +217,24 @@ class ProfileEditDialog(QDialog):
                 self, "接続テスト",
                 "SQLiteはローカルファイルのため接続テストは不要です。")
             return
-        ok, message = self._try_connect()
+        ok, message, error = self._try_connect()
         if ok:
             QMessageBox.information(self, "接続テスト成功",
                                     "PostgreSQLへの接続に成功しました。")
-        else:
-            QMessageBox.critical(self, "接続テスト失敗", message)
+            return
+        # データベース未作成が原因なら、その場で作成できるようにする
+        from app.utils.db_errors import is_missing_database_error
+        if error is not None and is_missing_database_error(error):
+            from app.ui.widgets.db_provision import offer_to_create_database
+            if offer_to_create_database(self, self._pg_values()):
+                self._test_connection()
+            return
+        QMessageBox.critical(self, "接続テスト失敗", message)
+
+    def _create_database(self):
+        """サーバーにこの会用のデータベースを作成する"""
+        from app.ui.widgets.db_provision import create_database_interactive
+        create_database_interactive(self, self._pg_values())
 
     # ------------------------------------------------------------ 保存
 
@@ -237,7 +256,14 @@ class ProfileEditDialog(QDialog):
             QMessageBox.warning(self, "入力エラー", error)
             return
 
-        ok, message = self._try_connect()
+        ok, message, error = self._try_connect()
+        if not ok and error is not None:
+            # データベース未作成なら、作成を促してから接続をやり直す
+            from app.utils.db_errors import is_missing_database_error
+            if is_missing_database_error(error):
+                from app.ui.widgets.db_provision import offer_to_create_database
+                if offer_to_create_database(self, self._pg_values()):
+                    ok, message, error = self._try_connect()
         if not ok:
             answer = QMessageBox.question(
                 self, "接続できません",
