@@ -147,6 +147,29 @@ def test_auto_map_matches_email_columns_from_export_headers(qtbot, db_session, m
             f"'{combo.currentText()}'")
 
 
+def _auto_mapped_position_header(qtbot, db_session, monkeypatch, header: str) -> str:
+    headers = ["会員番号", "事業所名", "氏名", header]
+    rows = [["111", "○○商事", "山田太郎", "議員"]]
+    monkeypatch.setattr(
+        "app.ui.dialogs.import_dialog.load_member_file",
+        lambda path: (headers, rows))
+    dlg = ImportDialog(db_session)
+    qtbot.addWidget(dlg)
+    dlg._on_file_loaded("dummy.xlsx", headers, rows)
+    return dlg._combos["position_name"].currentText()
+
+
+def test_auto_map_recognizes_position_column(qtbot, db_session, monkeypatch):
+    assert _auto_mapped_position_header(
+        qtbot, db_session, monkeypatch, "組織役職") == "組織役職"
+
+
+def test_auto_map_recognizes_legacy_position_column(qtbot, db_session, monkeypatch):
+    """旧称「会議所役職」の見出しを持つ既存Excelもそのまま取り込めること"""
+    assert _auto_mapped_position_header(
+        qtbot, db_session, monkeypatch, "会議所役職") == "会議所役職"
+
+
 def test_browse_returns_early_when_no_file_selected(qtbot, db_session, monkeypatch):
     """Test that cancelling the file dialog leaves the preview untouched."""
     monkeypatch.setattr(

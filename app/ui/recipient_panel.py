@@ -161,7 +161,7 @@ class RecipientPanel(QWidget):
 
         self._table = QTableWidget(0, 9)
         self._table.setHorizontalHeaderLabels(
-            ["送信", "会員番号", "会議所役職名", "事業所名", "役職名", "氏名",
+            ["送信", "会員番号", "組織役職名", "事業所名", "役職名", "氏名",
              "メールアドレス", "事業所名フリガナ", "氏名フリガナ"])
         h = self._table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)

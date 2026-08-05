@@ -35,14 +35,22 @@ def test_render_body_missing_key_becomes_empty():
 
 
 def test_render_body_all_placeholders():
-    template = "{事業所名} {役職名} {氏名} {会議所役職名} {col1} {col2} {col3} {col4} {col5}"
+    template = "{事業所名} {役職名} {氏名} {組織役職名} {col1} {col2} {col3} {col4} {col5}"
     context = {
         "事業所名": "A社", "役職名": "社長", "氏名": "田中",
-        "会議所役職名": "議員", "col1": "1", "col2": "2",
+        "組織役職名": "議員", "col1": "1", "col2": "2",
         "col3": "3", "col4": "4", "col5": "5",
     }
     result = render_body(template, context)
     assert result == "A社 社長 田中 議員 1 2 3 4 5"
+
+
+def test_render_body_accepts_legacy_position_placeholder():
+    """旧称のタグ {会議所役職名} を含むテンプレートもそのまま差し込めること"""
+    result = render_body("役職: {会議所役職名}", {"組織役職名": "副会頭"})
+
+    assert result == "役職: 副会頭"
+    assert "{会議所役職名}" not in result
 
 
 def test_build_message_structure():

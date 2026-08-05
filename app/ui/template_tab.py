@@ -15,7 +15,7 @@ from app.services.template_service import (
 from app.services.signature_service import get_signatures
 from app.services.staff_service import get_staff_by_name
 
-_BASE_PLACEHOLDERS = ["{事業所名}", "{役職名}", "{氏名}", "{会議所役職名}"]
+_BASE_PLACEHOLDERS = ["{事業所名}", "{役職名}", "{氏名}", "{組織役職名}"]
 _MERGE_PLACEHOLDERS = ["{col1}", "{col2}", "{col3}", "{col4}", "{col5}"]
 
 

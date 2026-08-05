@@ -729,7 +729,7 @@ class _DataWidget(QWidget):
         grp = QGroupBox("会員データ一括削除（開発用）")
         grp_layout = QVBoxLayout(grp)
         grp_layout.addWidget(QLabel(
-            "全会員データ、会議所役職・委員会の設定、会議・出欠・受付ログ、\n"
+            "全会員データ、組織役職・委員会の設定、会議・出欠・受付ログ、\n"
             "送信履歴を完全に削除します。\n"
             "この操作は取り消せません。開発・テスト時のみ使用してください。"
         ))
@@ -749,7 +749,7 @@ class _DataWidget(QWidget):
         )
         ret = QMessageBox.warning(
             self, "一括削除（開発用）",
-            "全会員データ、会議所役職・委員会の設定、会議・出欠・受付ログ、\n"
+            "全会員データ、組織役職・委員会の設定、会議・出欠・受付ログ、\n"
             "送信履歴を完全に削除します。\n"
             "この操作は取り消せません。\n\n本当に実行しますか？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -781,7 +781,7 @@ class _DataWidget(QWidget):
             session.commit()
             QMessageBox.information(
                 self, "完了",
-                "全会員データ、会議所役職・委員会の設定、会議・出欠・受付ログ、\n"
+                "全会員データ、組織役職・委員会の設定、会議・出欠・受付ログ、\n"
                 "送信履歴を削除しました。")
         except Exception as e:
             session.rollback()

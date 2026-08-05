@@ -18,7 +18,7 @@ from app.utils.app_config import get_graph_config
 
 _PRE_COL_KEYS = ["position", "org_name", "org_kana", "title", "name",
                  "status", "proxy_title", "proxy_name"]
-_PRE_HEADERS  = ["会議所役職名", "事業所名", "事業所名フリガナ", "役職名", "氏名",
+_PRE_HEADERS  = ["組織役職名", "事業所名", "事業所名フリガナ", "役職名", "氏名",
                  "ステータス", "代理役職名", "代理者氏名"]
 
 

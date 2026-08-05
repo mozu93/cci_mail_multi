@@ -7,8 +7,11 @@ import msal
 from pathlib import Path
 from msal_extensions import build_encrypted_persistence, PersistedTokenCache
 
-_ALL_KEYS = ["事業所名", "役職名", "氏名", "会議所役職名",
+_ALL_KEYS = ["事業所名", "役職名", "氏名", "組織役職名",
              "col1", "col2", "col3", "col4", "col5"]
+
+# 旧称のタグ。旧アプリから持ち込んだテンプレートもそのまま使えるようにする
+_ALIAS_KEYS = {"会議所役職名": "組織役職名"}
 
 _SEND_SCOPES = ["https://graph.microsoft.com/Mail.Send"]
 _READ_SCOPES = ["https://graph.microsoft.com/Mail.Read"]
@@ -44,6 +47,9 @@ def render_body(template: str, context: dict) -> str:
         placeholder = f"{{{key}}}"
         value = str(context.get(key, ""))
         template = template.replace(placeholder, value)
+    for old_key, new_key in _ALIAS_KEYS.items():
+        template = template.replace(
+            f"{{{old_key}}}", str(context.get(new_key, "")))
     return template
 
 
@@ -128,7 +134,7 @@ def compile_send_targets(
             "事業所名":     m.organization_name,
             "役職名":       m.title or "",
             "氏名":         m.name,
-            "会議所役職名": m.position.name if m.position else "",
+            "組織役職名":   m.position.name if m.position else "",
             **{k: merge.get(k, "") for k in ["col1", "col2", "col3", "col4", "col5"]},
         }
         for col_key, label in col_labels.items():

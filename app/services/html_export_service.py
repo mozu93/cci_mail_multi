@@ -134,7 +134,7 @@ def _meeting_html(meeting, attendance: list[dict],
         '<table>'
         '<thead><tr>'
         '<th>事業所名</th>'
-        '<th class="col-h">会議所役職</th>'
+        '<th class="col-h">組織役職</th>'
         '<th>氏名</th>'
         '<th>事前</th>'
         '<th>当日受付</th>'

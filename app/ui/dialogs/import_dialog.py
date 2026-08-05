@@ -14,7 +14,7 @@ _MEMBER_FIELDS = [
     ("title",            "役職名"),
     ("name",             "氏名 *"),
     ("name_kana",        "氏名フリガナ"),
-    ("position_name",    "会議所役職"),
+    ("position_name",    "組織役職"),
     ("committee_name",   "委員会"),
     ("email_1_address",  "メール1 アドレス"),
     ("email_1_label",    "メール1 ラベル"),
@@ -143,6 +143,9 @@ class ImportDialog(QDialog):
             "氏名": "name",
             "氏名フリガナ": "name_kana",
             "氏名かな": "name_kana",
+            "組織役職": "position_name",
+            "組織役職名": "position_name",
+            # 旧称。既存のExcelをそのまま取り込めるよう残す
             "会議所役職": "position_name",
             "会議所役職名": "position_name",
             "委員会": "committee_name",

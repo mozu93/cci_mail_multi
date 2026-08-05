@@ -207,7 +207,7 @@ def export_reception_xlsx(session: Session, meeting_id: int, filepath: str) -> N
                    end_row=formula_row, end_column=7)
 
     headers = [
-        "No.", "当日受付", "事業所名", "会議所役職", "氏名", "代理情報",
+        "No.", "当日受付", "事業所名", "組織役職", "氏名", "代理情報",
     ]
     for col, value in enumerate(headers, 1):
         cell = ws.cell(header_row, col, value)
@@ -300,7 +300,7 @@ def export_csv(session: Session, meeting_id: int, filepath: str) -> None:
     with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
         writer.writerow(["会議名", meeting.name if meeting else ""])
-        writer.writerow(["会員番号", "事業所名", "会議所役職", "氏名",
+        writer.writerow(["会員番号", "事業所名", "組織役職", "氏名",
                          "ステータス", "代理役職名", "代理氏名"])
         for d in data:
             writer.writerow([
@@ -316,9 +316,9 @@ _XLSX_CENTER_COLUMNS = {1, 2, 6}  # No., 事前, 氏名
 # （既定フォントCalibri 11・既定列幅8.43文字=64pxを基準とした変換式）。
 _XLSX_COLUMN_WIDTHS_PX = [30, 45, 45, 235, 129, 93, 141]
 
-# 議決権数の集計から除外する会議所役職
+# 議決権数の集計から除外する組織役職
 _VOTING_EXCLUDED_POSITION = "監事"
-# 除外対象でも議決権を持つ会議所役職
+# 除外対象でも議決権を持つ組織役職
 _VOTING_KEPT_POSITION = "専務理事"
 
 
@@ -345,7 +345,7 @@ def _px_to_excel_width(px: int) -> float:
 def _calc_attendance_summary(data: list[dict]) -> dict:
     """出欠状況・議決権数・実出席者数を集計する。
 
-    議決権数は出席・代理・委任の合計から、会議所役職が「監事」の会員と、
+    議決権数は出席・代理・委任の合計から、組織役職が「監事」の会員と、
     事業所名が除外キーワード（会ごとに設定）を含む会員を除いた人数。
     ただし「専務理事」は除外対象の事業所所属でも議決権数に含める。
     実出席（飲み物注文用）は出席・代理の合計（除外なし）。
@@ -378,7 +378,7 @@ def _calc_attendance_summary(data: list[dict]) -> dict:
 
 def export_xlsx(session: Session, meeting_id: int, filepath: str) -> None:
     """会議の出欠一覧をA4縦向き印刷向けに整形したExcelファイルに書き出す。
-    行順は会員一覧の並び順（会議所役職順）に従う。行数が多い場合は
+    行順は会員一覧の並び順（組織役職順）に従う。行数が多い場合は
     自動的に複数ページに分かれて印刷される。"""
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side

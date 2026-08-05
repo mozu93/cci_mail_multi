@@ -30,7 +30,7 @@ from app.ui.recipient_panel import RecipientPanel
 from app.utils.validators import is_valid_email
 
 
-_BASE_PLACEHOLDERS = ["{事業所名}", "{役職名}", "{氏名}", "{会議所役職名}"]
+_BASE_PLACEHOLDERS = ["{事業所名}", "{役職名}", "{氏名}", "{組織役職名}"]
 _MERGE_PLACEHOLDERS = ["{col1}", "{col2}", "{col3}", "{col4}", "{col5}"]
 
 
@@ -244,7 +244,7 @@ class SendTab(QWidget):
         self._pos_panel = QWidget()
         pp = QVBoxLayout(self._pos_panel)
         pp.setContentsMargins(0, 0, 0, 0)
-        pp.addWidget(QLabel("会議所役職（複数選択可）："))
+        pp.addWidget(QLabel("組織役職（複数選択可）："))
         self._pos_row = QHBoxLayout()
         self._pos_checks: dict[int, QCheckBox] = {}
         pp.addLayout(self._pos_row)

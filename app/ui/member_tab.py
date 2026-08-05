@@ -14,14 +14,14 @@ from app.utils.terms import retire_label, retired_label, order_button_label
 
 _COLUMN_LABELS = [
     "写真",
-    "会員番号", "会議所役職", "委員会", "事業所名", "事業所名フリガナ",
+    "会員番号", "組織役職", "委員会", "事業所名", "事業所名フリガナ",
     "氏名", "氏名フリガナ", "役職名",
     "メール(件数)", "最終更新日",
 ]
 
 
 class _RoleSortItem(QTableWidgetItem):
-    """会議所役職列専用: 順番設定の並び順→就任順→事業所名フリガナ順でソートする"""
+    """組織役職列専用: 順番設定の並び順→就任順→事業所名フリガナ順でソートする"""
 
     def __init__(self, text: str, sort_order: int, display_order, kana: str):
         super().__init__(text)

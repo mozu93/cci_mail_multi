@@ -411,7 +411,7 @@ def test_export_reception_xlsx_contains_actual_status_and_formula(
     assert "議事録用氏名" not in [
         cell.value for row in ws.iter_rows() for cell in row]
     assert [ws.cell(4, col).value for col in range(1, 7)] == [
-        "No.", "当日受付", "事業所名", "会議所役職", "氏名", "代理情報",
+        "No.", "当日受付", "事業所名", "組織役職", "氏名", "代理情報",
     ]
     assert [ws.cell(5 + row, 2).value for row in range(3)] == [
         "代理", "委任", "出席",

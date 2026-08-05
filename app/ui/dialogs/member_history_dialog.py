@@ -11,14 +11,14 @@ from app.utils.terms import active_state_label, retire_label
 
 _FIELD_LABELS = {
     "member_number":     "会員番号",
-    "position_name":     "会議所役職",
+    "position_name":     "組織役職",
     "organization_name": "事業所名",
     "organization_kana": "事業所名フリガナ",
     "title":             "役職名",
     "name":              "氏名",
     "name_kana":         "氏名フリガナ",
     "notes":             "備考",
-    "position_id":       "会議所役職ID（旧）",
+    "position_id":       "組織役職ID（旧）",
 }
 
 

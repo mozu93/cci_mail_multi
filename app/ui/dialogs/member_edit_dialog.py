@@ -98,7 +98,7 @@ class MemberEditDialog(QDialog):
             self._committee_combo.addItem(c.name, c.id)
 
         form.addRow("会員番号 *", self._member_number)
-        form.addRow("会議所役職", self._position_combo)
+        form.addRow("組織役職", self._position_combo)
         form.addRow("委員会", self._committee_combo)
         form.addRow("事業所名 *", self._org_name)
         form.addRow("事業所名フリガナ", self._org_kana)

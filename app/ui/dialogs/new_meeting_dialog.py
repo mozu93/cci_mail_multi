@@ -26,8 +26,8 @@ class NewMeetingDialog(QDialog):
 
         target_grp = QGroupBox("対象者")
         target_layout = QVBoxLayout(target_grp)
-        self._rb_all = QRadioButton("全員（総会など）")
-        self._rb_pos = QRadioButton("役職指定（常議員会など）")
+        self._rb_all = QRadioButton("全員")
+        self._rb_pos = QRadioButton("役職指定")
         self._rb_all.setChecked(True)
         btn_grp = QButtonGroup(self)
         btn_grp.addButton(self._rb_all)

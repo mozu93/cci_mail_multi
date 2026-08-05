@@ -191,7 +191,7 @@ class MergePreviewDialog(QDialog):
         merge = self._merge_data[mn]
         context = {
             "事業所名": "（事業所名）", "役職名": "（役職名）",
-            "氏名": "（氏名）", "会議所役職名": "（会議所役職名）",
+            "氏名": "（氏名）", "組織役職名": "（組織役職名）",
             **{k: merge.get(k, "") for k in _COL_KEYS},
         }
         # ラベルエイリアスを追加

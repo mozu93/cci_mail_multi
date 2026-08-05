@@ -101,7 +101,7 @@ def import_members(session: Session, rows: list[list],
                     "sort_order": n,
                 })
 
-        # 会議所役職・委員会のマスタ新規作成もこの行のSAVEPOINT内で行う。
+        # 組織役職・委員会のマスタ新規作成もこの行のSAVEPOINT内で行う。
         # SAVEPOINT開始前にflushすると、この行が失敗してロールバックしても
         # 新規マスタ行だけが未使用のまま残ってしまい、同じ名称を使う後続行にも
         # 無効なIDを渡してしまう（=委員会列がインポートされない不具合の原因）。

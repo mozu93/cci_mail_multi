@@ -45,7 +45,7 @@ def test_member_fields_substituted():
     result = compile_send_targets(
         checked_rows=rows,
         subject_tpl="{事業所名}御中",
-        body_tpl="{役職名} {氏名}様\n会議所役職: {会議所役職名}",
+        body_tpl="{役職名} {氏名}様\n組織役職: {組織役職名}",
         sig_body="",
         merge_data={},
         col_labels={},
@@ -55,7 +55,7 @@ def test_member_fields_substituted():
     assert len(result) == 1
     t = result[0]
     assert t["subject"] == "テスト商事御中"
-    assert t["body"] == "社長 テスト 太郎様\n会議所役職: 副会頭"
+    assert t["body"] == "社長 テスト 太郎様\n組織役職: 副会頭"
     assert t["to_address"] == "test@example.com"
     assert t["org_name"] == "テスト商事"
     assert t["member_id"] == 1
