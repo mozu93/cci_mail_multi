@@ -41,7 +41,9 @@ class AttendanceMailImportDialog(QDialog):
     def _build(self):
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel(
-            "Outlookで仕分けした対象フォルダから、常議員会の出欠連絡メールを取り込みます。"))
+            "Outlookで仕分けした対象フォルダから、出欠連絡メールを取り込みます。\n"
+            "本文が「【出欠】【事業所名】【氏名】…」の形式である必要があります"
+            "（管理者マニュアルの「出欠連絡フォームの作り方」を参照）。"))
 
         form = QFormLayout()
         self._folder_input = QLineEdit(get_attendance_mail_folder())

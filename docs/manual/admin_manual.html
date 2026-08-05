@@ -396,7 +396,9 @@ net start postgresql-cci_mail</pre>
 <ol class="steps">
   <li>登録したアプリの画面で「APIのアクセス許可」を開く</li>
   <li>「アクセス許可の追加」→「Microsoft Graph」→「委任されたアクセス許可」</li>
-  <li><code>Mail.Send</code> を検索してチェックし追加</li>
+  <li><code>Mail.Send</code> を検索してチェックし追加（メール送信）</li>
+  <li><code>Mail.Read</code> を検索してチェックし追加（「メールから出欠を取り込む」機能を使う場合）</li>
+  <li>代理差出人アドレスを使う場合は <code>Mail.Send.Shared</code> も追加</li>
   <li>組織の管理者である場合は「管理者の同意を与えます」をクリック</li>
 </ol>
 
