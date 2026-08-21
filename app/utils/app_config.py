@@ -44,6 +44,10 @@ def get_graph_config() -> dict:
     return get_config().get("graph", {})
 
 
+def get_gmail_config() -> dict:
+    return get_config().get("gmail", {})
+
+
 def get_db_type() -> str:
     """起動中の会のDB種別。'sqlite' または 'postgresql'（既定は 'sqlite'）"""
     from app.utils.profile_config import get_active_db_settings

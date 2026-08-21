@@ -1,5 +1,7 @@
 from app.ui.send_tab import _split_oversized_targets, _duplicate_recipient_groups
-from app.services.email_service import ATTACHMENT_SIZE_LIMIT_BYTES
+from app.services.email_service import (
+    ATTACHMENT_SIZE_LIMIT_BYTES, GMAIL_ATTACHMENT_SIZE_LIMIT_BYTES,
+)
 
 
 def test_split_oversized_targets_separates_over_limit(tmp_path):
@@ -21,6 +23,18 @@ def test_split_oversized_targets_empty_attachments_is_ok():
     targets = [{"org_name": "添付なし", "attachments": []}]
     ok, oversized = _split_oversized_targets(targets)
     assert len(ok) == 1
+    assert oversized == []
+
+
+def test_split_oversized_targets_uses_custom_limit_for_gmail(tmp_path):
+    f = tmp_path / "mid.pdf"
+    f.write_bytes(b"x" * (ATTACHMENT_SIZE_LIMIT_BYTES + 1))
+    targets = [{"org_name": "中サイズ会社", "attachments": [str(f)]}]
+
+    ok, oversized = _split_oversized_targets(
+        targets, limit=GMAIL_ATTACHMENT_SIZE_LIMIT_BYTES)
+
+    assert [t["org_name"] for t in ok] == ["中サイズ会社"]
     assert oversized == []
 
 

@@ -23,9 +23,11 @@ from app.services.email_service import (
     compile_send_targets, send_mail, send_test_mail, get_access_token,
     total_attachment_size, ATTACHMENT_SIZE_LIMIT_BYTES,
     apply_test_mode, parse_recipient_addresses,
+    send_mail_gmail, send_test_mail_gmail, open_gmail_connection,
+    GMAIL_ATTACHMENT_SIZE_LIMIT_BYTES,
 )
 from app.services.send_job_service import create_job, start_job, finish_job, add_log
-from app.utils.app_config import get_config, save_config, get_graph_config
+from app.utils.app_config import get_config, save_config, get_graph_config, get_gmail_config
 from app.ui.recipient_panel import RecipientPanel
 from app.utils.validators import is_valid_email
 
@@ -46,13 +48,15 @@ def _dev_tools_enabled() -> bool:
 _SEND_INTERVAL_SECONDS = 2.0
 
 
-def _split_oversized_targets(targets: list[dict]) -> tuple[list[dict], list[dict]]:
+def _split_oversized_targets(
+        targets: list[dict],
+        limit: int = ATTACHMENT_SIZE_LIMIT_BYTES) -> tuple[list[dict], list[dict]]:
     """添付合計サイズが上限を超えるターゲットを分離する。
     戻り値: (上限内のターゲット, 上限超過のターゲット)
     """
     ok, oversized = [], []
     for t in targets:
-        if total_attachment_size(t.get("attachments", [])) > ATTACHMENT_SIZE_LIMIT_BYTES:
+        if total_attachment_size(t.get("attachments", [])) > limit:
             oversized.append(t)
         else:
             ok.append(t)
@@ -84,13 +88,16 @@ class _SendWorker(QThread):
     progress = pyqtSignal(int, int, str)
     finished = pyqtSignal(int, int, int)
 
-    def __init__(self, targets: list[dict], graph_config: dict, job_id: int,
-                access_token: str):
+    def __init__(self, targets: list[dict], config: dict, job_id: int,
+                access_token: str | None = None, provider: str = "microsoft365",
+                gmail_connection=None):
         super().__init__()
         self._targets = targets
-        self._graph_config = graph_config
+        self._config = config
         self._job_id = job_id
         self._access_token = access_token
+        self._provider = provider
+        self._gmail_connection = gmail_connection
         self._cancelled = False
 
     def request_cancel(self):
@@ -118,14 +125,21 @@ class _SendWorker(QThread):
                     self.progress.emit(i, total, f"スキップ: {t['org_name']}")
                     continue
                 try:
-                    mail_options = {"access_token": self._access_token}
+                    mail_options = {}
                     if t.get("cc_addresses"):
                         mail_options["cc_addresses"] = t["cc_addresses"]
                     if t.get("bcc_addresses"):
                         mail_options["bcc_addresses"] = t["bcc_addresses"]
-                    send_mail(self._graph_config, to_addr, t["subject"],
-                              t["body"], t.get("attachments", []),
-                              **mail_options)
+                    if self._provider == "gmail":
+                        send_mail_gmail(self._config, to_addr, t["subject"],
+                                        t["body"], t.get("attachments", []),
+                                        connection=self._gmail_connection,
+                                        **mail_options)
+                    else:
+                        mail_options["access_token"] = self._access_token
+                        send_mail(self._config, to_addr, t["subject"],
+                                  t["body"], t.get("attachments", []),
+                                  **mail_options)
                     add_log(session, self._job_id, t.get("member_id"),
                             to_addr, t["subject"], "success")
                     success += 1
@@ -150,6 +164,11 @@ class _SendWorker(QThread):
                     time.sleep(_SEND_INTERVAL_SECONDS)
             self.finished.emit(success, error, skip)
         finally:
+            if self._gmail_connection is not None:
+                try:
+                    self._gmail_connection.quit()
+                except Exception:
+                    pass
             session.close()
 
 
@@ -420,6 +439,16 @@ class SendTab(QWidget):
         grp = QGroupBox("最終確認・送信")
         layout = QVBoxLayout(grp)
 
+        provider_row = QHBoxLayout()
+        provider_row.addWidget(QLabel("送信元:"))
+        self._provider_combo = _NoWheelComboBox()
+        self._provider_combo.addItem("Microsoft 365", "microsoft365")
+        self._provider_combo.addItem("Gmail", "gmail")
+        self._provider_combo.currentIndexChanged.connect(self._on_provider_change)
+        provider_row.addWidget(self._provider_combo)
+        provider_row.addStretch()
+        layout.addLayout(provider_row)
+
         f = QFormLayout()
         self._job_name = QLineEdit()
         self._job_name.setPlaceholderText("例：2026年6月 総会案内")
@@ -472,11 +501,21 @@ class SendTab(QWidget):
         self._load_combos()
         self._update_test_button_label()
 
+    def _current_provider(self) -> str:
+        return self._provider_combo.currentData() or "microsoft365"
+
+    def _current_send_config(self) -> dict:
+        return (get_gmail_config() if self._current_provider() == "gmail"
+                else get_graph_config())
+
+    def _on_provider_change(self):
+        self._update_test_button_label()
+
     def _update_test_button_label(self):
-        graph_config = get_graph_config()
-        addr = graph_config.get("test_address")
+        config = self._current_send_config()
+        addr = config.get("test_address")
         self._btn_test.setText(f"{addr} にテスト送信" if addr else "テスト送信（未設定）")
-        if graph_config.get("test_mode"):
+        if config.get("test_mode"):
             self._test_mode_label.setText(
                 f"【テストモード】本番宛先へは送信せず、すべて {addr or '未設定'} へ送ります。")
             self._test_mode_label.setStyleSheet(
@@ -935,10 +974,10 @@ class SendTab(QWidget):
         if not targets:
             QMessageBox.warning(self, "宛先未選択", "宛先を1件以上選択してください。")
             return
-        graph_config = get_graph_config()
-        if graph_config.get("test_mode"):
+        send_config = self._current_send_config()
+        if send_config.get("test_mode"):
             try:
-                targets = apply_test_mode(targets, graph_config.get("test_address", ""))
+                targets = apply_test_mode(targets, send_config.get("test_address", ""))
             except ValueError as e:
                 QMessageBox.warning(self, "設定エラー", str(e))
                 return
@@ -956,8 +995,9 @@ class SendTab(QWidget):
                                 "テスト送信には差し込み内容を確認するための宛先を1件以上選択してください。\n"
                                 "※ 実際には選択した宛先には送信されません。")
             return
-        graph_config = get_graph_config()
-        if not graph_config.get("test_address"):
+        provider = self._current_provider()
+        send_config = self._current_send_config()
+        if not send_config.get("test_address"):
             QMessageBox.warning(self, "エラー",
                                 "設定タブでテスト送信先アドレスを設定してください。")
             return
@@ -978,13 +1018,17 @@ class SendTab(QWidget):
         finally:
             session.close()
         try:
-            send_test_mail(graph_config, t["subject"], t["body"],
-                           t.get("attachments", []))
+            if provider == "gmail":
+                send_test_mail_gmail(send_config, t["subject"], t["body"],
+                                     t.get("attachments", []))
+            else:
+                send_test_mail(send_config, t["subject"], t["body"],
+                               t.get("attachments", []))
             session = get_session()
             try:
                 add_log(
                     session, job_id, t.get("member_id"),
-                    graph_config["test_address"], f"【テスト】{t['subject']}",
+                    send_config["test_address"], f"【テスト】{t['subject']}",
                     "success")
                 finish_job(session, job_id)
             finally:
@@ -992,7 +1036,7 @@ class SendTab(QWidget):
             QMessageBox.information(
                 self, "テスト送信完了",
                 f"テストメールを送信しました。\n"
-                f"送信先: {graph_config['test_address']}（設定タブのテスト送信先）\n\n"
+                f"送信先: {send_config['test_address']}（設定タブのテスト送信先）\n\n"
                 f"※ 選択した宛先（{t['org_name']}）の差し込み内容で送信しています。")
         except Exception as e:
             if job_id is not None:
@@ -1000,7 +1044,7 @@ class SendTab(QWidget):
                 try:
                     add_log(
                         session, job_id, t.get("member_id"),
-                        graph_config.get("test_address", ""),
+                        send_config.get("test_address", ""),
                         f"【テスト】{t['subject']}", "error", str(e))
                     finish_job(session, job_id)
                 finally:
@@ -1017,12 +1061,16 @@ class SendTab(QWidget):
             QMessageBox.warning(self, "エラー", "宛先を選択してください。")
             return
 
-        targets, oversized = _split_oversized_targets(targets)
+        provider = self._current_provider()
+        attach_limit = (GMAIL_ATTACHMENT_SIZE_LIMIT_BYTES if provider == "gmail"
+                       else ATTACHMENT_SIZE_LIMIT_BYTES)
+        attach_limit_label = "25MB" if provider == "gmail" else "3MB"
+        targets, oversized = _split_oversized_targets(targets, limit=attach_limit)
         if oversized:
             names = "\n".join(f"・{t['org_name']}" for t in oversized)
             ret = QMessageBox.question(
                 self, "添付サイズ超過",
-                f"以下の宛先は添付ファイル合計サイズが上限（3MB）を超えています。\n"
+                f"以下の宛先は添付ファイル合計サイズが上限（{attach_limit_label}）を超えています。\n"
                 f"送信対象から除外して続行しますか？\n\n{names}",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No)
@@ -1036,8 +1084,13 @@ class SendTab(QWidget):
         if not job_name:
             QMessageBox.warning(self, "エラー", "ジョブ名を入力してください。")
             return
-        graph_config = get_graph_config()
-        if not graph_config.get("tenant_id"):
+        send_config = self._current_send_config()
+        if provider == "gmail":
+            if not send_config.get("address") or not send_config.get("app_password"):
+                QMessageBox.warning(self, "エラー",
+                                    "設定タブでGmail設定を行ってください。")
+                return
+        elif not send_config.get("tenant_id"):
             QMessageBox.warning(self, "エラー",
                                 "設定タブでMicrosoft 365設定を行ってください。")
             return
@@ -1058,29 +1111,44 @@ class SendTab(QWidget):
                 + "\n".join(details))
             return
 
-        test_mode = bool(graph_config.get("test_mode"))
+        test_mode = bool(send_config.get("test_mode"))
         if test_mode:
             try:
                 targets = apply_test_mode(
-                    targets, graph_config.get("test_address", ""))
+                    targets, send_config.get("test_address", ""))
             except ValueError as e:
                 QMessageBox.warning(self, "設定エラー", str(e))
                 return
 
-        try:
-            access_token, account_username = get_access_token(
-                graph_config, return_account=True)
-        except Exception as e:
-            QMessageBox.critical(self, "認証エラー", str(e))
-            return
+        access_token = None
+        gmail_connection = None
+        if provider == "gmail":
+            account_username = send_config.get("address", "")
+            try:
+                gmail_connection = open_gmail_connection(send_config)
+            except Exception as e:
+                QMessageBox.critical(self, "認証エラー", str(e))
+                return
+            sender_line = f"　送信元　　　: Gmail（{account_username}）\n"
+        else:
+            try:
+                access_token, account_username = get_access_token(
+                    send_config, return_account=True)
+            except Exception as e:
+                QMessageBox.critical(self, "認証エラー", str(e))
+                return
 
-        if account_username and graph_config.get("account_username") != account_username:
-            config = get_config()
-            graph = config.get("graph", {}).copy()
-            graph["account_username"] = account_username
-            config["graph"] = graph
-            save_config(config)
-            graph_config = graph
+            if account_username and send_config.get("account_username") != account_username:
+                config = get_config()
+                graph = config.get("graph", {}).copy()
+                graph["account_username"] = account_username
+                config["graph"] = graph
+                save_config(config)
+                send_config = graph
+            sender_line = (
+                f"　認証アカウント: {account_username or '取得不可'}\n"
+                f"　代理差出人　: {send_config.get('from_address') or '認証アカウント本人'}\n"
+            )
 
         tmpl_name = self._template_combo.currentText()
         has_attach = any(t["attachments"] for t in targets)
@@ -1089,8 +1157,7 @@ class SendTab(QWidget):
             f"以下の内容で送信します。よろしいですか？\n\n"
             f"　ジョブ名　　: {job_name}\n"
             f"　操作者　　　: {self._staff_name}\n"
-            f"　認証アカウント: {account_username or '取得不可'}\n"
-            f"　代理差出人　: {graph_config.get('from_address') or '認証アカウント本人'}\n"
+            + sender_line +
             f"　CC　　　　　: {self._cc_edit.text().strip() or 'なし'}\n"
             f"　BCC　　　　 : {self._bcc_edit.text().strip() or 'なし'}\n"
             f"　送信モード　: {'テストモード（全件をテスト送信先へ振替）' if test_mode else '通常送信'}\n"
@@ -1105,6 +1172,11 @@ class SendTab(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No)
         if ret != QMessageBox.StandardButton.Yes:
+            if gmail_connection is not None:
+                try:
+                    gmail_connection.quit()
+                except Exception:
+                    pass
             return
 
         session = get_session()
@@ -1123,7 +1195,8 @@ class SendTab(QWidget):
         self._btn_send.setEnabled(False)
         self._btn_cancel.setVisible(True)
 
-        self._worker = _SendWorker(targets, graph_config, job_id, access_token)
+        self._worker = _SendWorker(targets, send_config, job_id, access_token,
+                                   provider=provider, gmail_connection=gmail_connection)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(
             lambda s, e, sk: self._on_finished(job_id, s, e, sk))
