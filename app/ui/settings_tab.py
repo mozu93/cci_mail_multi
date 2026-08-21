@@ -43,6 +43,7 @@ class SettingsTab(QWidget):
         inner = QTabWidget()
         inner.setMaximumWidth(900)
         inner.addTab(_GraphSettingsWidget(), "Microsoft 365")
+        inner.addTab(_GmailSettingsWidget(), "Gmail")
         inner.addTab(_SignatureWidget(self._staff_id), "署名管理")
         self._position_committee_widget = _PositionCommitteeWidget()
         inner.addTab(self._position_committee_widget, "役職・委員会管理")
@@ -189,6 +190,115 @@ class _GraphSettingsWidget(QWidget):
             QMessageBox.information(
                 self, "成功",
                 f"Microsoft 365への接続に成功しました。\n認証アカウント: {username or '取得不可'}")
+        except Exception as e:
+            QMessageBox.critical(self, "エラー", str(e))
+
+
+class _GmailSettingsWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        grp = QGroupBox("Gmail（SMTP）設定")
+        form = QFormLayout(grp)
+        self._address = QLineEdit()
+        self._app_password = QLineEdit()
+        self._app_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self._test_address = QLineEdit()
+        self._test_mode = QCheckBox("テストモード（本番宛先へ送らず、すべてテスト送信先へ送る）")
+        form.addRow("Gmailアドレス", self._address)
+        form.addRow("アプリパスワード", self._app_password)
+        form.addRow("テスト送信先", self._test_address)
+        form.addRow("", self._test_mode)
+        layout.addWidget(grp)
+        layout.addWidget(QLabel(
+            "※ Gmailアドレスで2段階認証を有効にしたうえで、Googleアカウントの\n"
+            "「アプリパスワード」を生成して入力してください（通常のログインパスワードは使用できません）。\n"
+            "※ 送信元（差出人）は常にこのGmailアドレスになります。"))
+        btn_row = QHBoxLayout()
+        btn_save = QPushButton("設定を保存")
+        btn_save.clicked.connect(self._save)
+        btn_test = QPushButton("接続テスト")
+        btn_test.clicked.connect(self._test_connection)
+        btn_row.addWidget(btn_save)
+        btn_row.addWidget(btn_test)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+        self._status_label = QLabel("")
+        layout.addWidget(self._status_label)
+        layout.addStretch()
+        self._load()
+        self._test_mode.toggled.connect(self._save_test_mode_immediately)
+
+    def _load(self):
+        cfg = get_config().get("gmail", {})
+        self._address.setText(cfg.get("address", ""))
+        self._app_password.setText(cfg.get("app_password", ""))
+        self._test_address.setText(cfg.get("test_address", ""))
+        self._test_mode.setChecked(bool(cfg.get("test_mode", False)))
+
+    def _save(self):
+        address = self._address.text().strip()
+        test_address = self._test_address.text().strip()
+        if address and not is_valid_email(address):
+            QMessageBox.warning(self, "入力エラー", "Gmailアドレスの形式が正しくありません。")
+            return False
+        if test_address and not is_valid_email(test_address):
+            QMessageBox.warning(self, "入力エラー", "テスト送信先の形式が正しくありません。")
+            return False
+        if self._test_mode.isChecked() and not test_address:
+            QMessageBox.warning(
+                self, "入力エラー",
+                "テストモードを有効にするにはテスト送信先を設定してください。")
+            return False
+        config = get_config()
+        gmail = config.get("gmail", {}).copy()
+        gmail.update({
+            "address":      address,
+            "app_password": self._app_password.text(),
+            "test_address": test_address,
+            "test_mode":    self._test_mode.isChecked(),
+        })
+        config["gmail"] = gmail
+        save_config(config)
+        from app.ui.widgets.inline_status import show_inline_message
+        show_inline_message(self._status_label, "設定を保存しました")
+        return True
+
+    def _save_test_mode_immediately(self, enabled: bool):
+        """テストモードの見た目と実際の送信設定が食い違わないよう即時保存する。"""
+        test_address = self._test_address.text().strip()
+        if enabled and (not test_address or not is_valid_email(test_address)):
+            self._test_mode.blockSignals(True)
+            self._test_mode.setChecked(False)
+            self._test_mode.blockSignals(False)
+            QMessageBox.warning(
+                self, "入力エラー",
+                "テストモードを有効にするには、正しいテスト送信先を設定してください。")
+            return
+
+        config = get_config()
+        gmail = config.get("gmail", {}).copy()
+        gmail["test_address"] = test_address
+        gmail["test_mode"] = enabled
+        config["gmail"] = gmail
+        save_config(config)
+        from app.ui.widgets.inline_status import show_inline_message
+        show_inline_message(
+            self._status_label,
+            "テストモードを有効にしました" if enabled else "テストモードを解除しました")
+
+    def _test_connection(self):
+        if not self._save():
+            return
+        try:
+            from app.services.email_service import open_gmail_connection
+            config = get_config()
+            gmail = config.get("gmail", {}).copy()
+            conn = open_gmail_connection(gmail)
+            conn.quit()
+            QMessageBox.information(
+                self, "成功",
+                f"Gmailへの接続に成功しました。\nGmailアドレス: {gmail.get('address', '')}")
         except Exception as e:
             QMessageBox.critical(self, "エラー", str(e))
 

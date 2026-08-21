@@ -1,7 +1,10 @@
 import base64
 import os
 import re
+import smtplib
 import time
+from email.message import EmailMessage
+from email.utils import formataddr
 import requests
 import msal
 from pathlib import Path
@@ -104,6 +107,7 @@ def build_message(to_address: str, subject: str, body: str,
 
 
 ATTACHMENT_SIZE_LIMIT_BYTES = 3 * 1024 * 1024  # Graph sendMail直添付の実用上限（約3MB）
+GMAIL_ATTACHMENT_SIZE_LIMIT_BYTES = 25 * 1024 * 1024  # Gmail送信の実用上限（約25MB）
 
 
 def total_attachment_size(paths: list[str]) -> int:
@@ -289,3 +293,87 @@ def send_test_mail(graph_config: dict, subject: str, body: str,
         raise ValueError("テスト送信先アドレスが設定されていません。")
     send_mail(graph_config, test_address, f"【テスト】{subject}", body,
               attachments or [])
+
+
+_GMAIL_SMTP_HOST = "smtp.gmail.com"
+_GMAIL_SMTP_PORT = 465
+
+
+def build_gmail_message(from_address: str, to_address: str, subject: str,
+                        body: str, attachments: list[str],
+                        cc_addresses: list[str] | None = None,
+                        bcc_addresses: list[str] | None = None) -> EmailMessage:
+    for path in attachments:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"添付ファイルが見つかりません: {path}")
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = formataddr(("", from_address))
+    msg["To"] = to_address
+    if cc_addresses:
+        msg["Cc"] = ", ".join(cc_addresses)
+    if bcc_addresses:
+        msg["Bcc"] = ", ".join(bcc_addresses)
+    msg.set_content(body)
+    for path in attachments:
+        with open(path, "rb") as f:
+            data = f.read()
+        msg.add_attachment(data, maintype="application", subtype="octet-stream",
+                           filename=os.path.basename(path))
+    return msg
+
+
+def open_gmail_connection(gmail_config: dict) -> smtplib.SMTP_SSL:
+    """Gmail SMTPへログイン済みの接続を1つ開く（複数通の送信で使い回せる）。"""
+    address = gmail_config.get("address", "").strip()
+    app_password = gmail_config.get("app_password", "")
+    if not address or not app_password:
+        raise ValueError("Gmailアドレスとアプリパスワードを設定してください。")
+    conn = smtplib.SMTP_SSL(_GMAIL_SMTP_HOST, _GMAIL_SMTP_PORT, timeout=30)
+    try:
+        conn.login(address, app_password)
+    except Exception:
+        conn.quit()
+        raise
+    return conn
+
+
+def sanitize_smtp_error(error: Exception) -> str:
+    """履歴に個人情報や資格情報を含むSMTPエラー詳細を保存しない。"""
+    if isinstance(error, smtplib.SMTPAuthenticationError):
+        return "Gmailの認証に失敗しました。アプリパスワードを確認してください。"
+    if isinstance(error, smtplib.SMTPRecipientsRefused):
+        return "宛先アドレスがGmailに拒否されました。"
+    if isinstance(error, smtplib.SMTPSenderRefused):
+        return "差出人アドレスがGmailに拒否されました。"
+    if isinstance(error, (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected)):
+        return "Gmailサーバーへの接続に失敗しました。"
+    return "Gmail送信でエラーが発生しました。"
+
+
+def send_mail_gmail(gmail_config: dict, to_address: str, subject: str,
+                    body: str, attachments: list[str] | None = None,
+                    cc_addresses: list[str] | None = None,
+                    bcc_addresses: list[str] | None = None,
+                    connection: smtplib.SMTP_SSL | None = None) -> None:
+    address = gmail_config.get("address", "").strip()
+    msg = build_gmail_message(
+        address, to_address, subject, body, attachments or [],
+        cc_addresses=cc_addresses, bcc_addresses=bcc_addresses)
+    conn = connection or open_gmail_connection(gmail_config)
+    try:
+        conn.send_message(msg)
+    except smtplib.SMTPException as e:
+        raise RuntimeError(sanitize_smtp_error(e)) from e
+    finally:
+        if connection is None:
+            conn.quit()
+
+
+def send_test_mail_gmail(gmail_config: dict, subject: str, body: str,
+                         attachments: list[str] | None = None) -> None:
+    test_address = gmail_config.get("test_address", "")
+    if not test_address:
+        raise ValueError("テスト送信先アドレスが設定されていません。")
+    send_mail_gmail(gmail_config, test_address, f"【テスト】{subject}", body,
+                    attachments or [])
